@@ -45,6 +45,49 @@ const UNIT_TYPES = {
   awacs: { name: "预警舰", atk: 2, def: 5, maxHp: 4, vision: 3, move: 3, counter: null },
 };
 
+const AUDIO_PATTERNS = {
+  select: [
+    [520, 0.035, "sine", 0.035],
+    [760, 0.05, "sine", 0.028],
+  ],
+  move: [
+    [260, 0.045, "triangle", 0.03],
+    [390, 0.08, "triangle", 0.026],
+  ],
+  capture: [
+    [420, 0.06, "sine", 0.04],
+    [620, 0.07, "sine", 0.04],
+    [840, 0.09, "sine", 0.035],
+  ],
+  warp: [
+    [180, 0.08, "sawtooth", 0.035],
+    [520, 0.12, "sine", 0.045],
+    [1040, 0.12, "sine", 0.035],
+    [740, 0.16, "triangle", 0.03],
+  ],
+  attack: [
+    [120, 0.08, "square", 0.035],
+    [90, 0.1, "sawtooth", 0.03],
+  ],
+  error: [
+    [180, 0.09, "square", 0.025],
+    [130, 0.1, "square", 0.022],
+  ],
+  apEmpty: [
+    [880, 0.08, "square", 0.04],
+    [440, 0.1, "square", 0.038],
+    [220, 0.18, "sawtooth", 0.04],
+  ],
+  win: [
+    [420, 0.08, "sine", 0.04],
+    [560, 0.08, "sine", 0.04],
+    [700, 0.12, "sine", 0.04],
+    [980, 0.18, "triangle", 0.035],
+  ],
+};
+
+let audioContext = null;
+
 const TILE_TYPES = {
   base: { name: "星港基地", fill: "#20364f", moveCost: 1 },
   plain: { name: "普通星域", fill: "#162536", moveCost: 1 },
@@ -71,6 +114,7 @@ function createInitialState() {
         score: 0,
         resources: 0,
         ap: 6,
+        apEmptyPlayed: false,
         visible: new Set(),
         explored: new Set(),
       },
@@ -553,6 +597,7 @@ function selectUnit(unit) {
   if (!unit || unit.owner !== currentPlayer().id || state.gameOver) return;
   state.selectedUnitId = unit.id;
   state.reachable = computeReachable(unit);
+  playSound("select");
   toast(`${UNIT_TYPES[unit.type].name} 已选中。蓝色光圈为可行动范围。`);
   renderUi();
   draw();
@@ -608,6 +653,7 @@ function moveUnit(unit, q, r, cost) {
   refreshVision();
   state.reachable = computeReachable(unit);
   const tile = tileAt(q, r);
+  playSound("move");
   toast(`舰队移动至 ${TILE_TYPES[tile.type].name}，消耗 ${cost} 行动力。`);
 }
 
@@ -623,12 +669,14 @@ function attack(attacker, defender) {
   const apCost = 2;
 
   if (currentPlayerState().ap < apCost) {
+    playSound("error");
     toast("行动力不足，无法攻击。");
     return;
   }
 
   currentPlayerState().ap -= apCost;
   attacker.moved = true;
+  playSound("attack");
 
   if (atkPower >= defPower * 1.2) {
     defender.hp -= 2;
@@ -665,20 +713,24 @@ function captureSelected() {
   if (!unit || unit.owner !== currentPlayer().id || state.gameOver) return;
   const tile = tileAt(unit.q, unit.r);
   if (!["resource", "warp", "center"].includes(tile.type)) {
+    playSound("error");
     toast("这里只是普通星域，无法占领。");
     return;
   }
   if (tile.owner === unit.owner) {
+    playSound("error");
     toast("该据点已经属于你。");
     return;
   }
   if (currentPlayerState().ap < 2) {
+    playSound("error");
     toast("行动力不足，占领需要 2 点行动力。");
     return;
   }
   currentPlayerState().ap -= 2;
   tile.owner = unit.owner;
   addLog(`${playerName(unit.owner)}占领了${TILE_TYPES[tile.type].name}。`);
+  playSound("capture");
   toast(`${TILE_TYPES[tile.type].name}占领成功。`);
   refreshVision();
   renderUi();
@@ -691,18 +743,19 @@ function warpSelected() {
   const tile = tileAt(unit.q, unit.r);
   const player = currentPlayerState();
   if (tile.type !== "warp" || tile.owner !== unit.owner) {
+    playSound("error");
     toast("需要站在己方折跃门上才能折跃。");
     return;
   }
   if (player.ap < 3) {
+    playSound("error");
     toast("行动力不足，折跃需要 3 点行动力。");
     return;
   }
-  const gates = [...state.tiles.values()].filter(
-    (item) => item.type === "warp" && item.owner === unit.owner && item.id !== tile.id && !unitAt(item.q, item.r),
-  );
+  const gates = getWarpTargets(unit, player);
   if (!gates.length) {
-    toast("还没有第二座可用的己方折跃门。");
+    playSound("error");
+    toast("还没有已探索且未被占用的其他折跃门。");
     return;
   }
   gates.sort((a, b) => hexDistance(a.q, a.r, 0, 0) - hexDistance(b.q, b.r, 0, 0));
@@ -710,8 +763,9 @@ function warpSelected() {
   player.ap -= 3;
   unit.q = target.q;
   unit.r = target.r;
-  addLog(`${playerName(unit.owner)}通过折跃门完成远距离投送。`);
-  toast("折跃完成，航线节点开始产生战略价值。");
+  addLog(`${playerName(unit.owner)}通过折跃门投送到${TILE_TYPES[target.type].name}。`);
+  playSound("warp");
+  toast("折跃完成：你已抵达另一座折跃门，可继续推进或占领。");
   refreshVision();
   state.reachable = computeReachable(unit);
   renderUi();
@@ -736,6 +790,7 @@ function endTurn() {
 
   const player = currentPlayerState();
   player.ap = 6;
+  player.apEmptyPlayed = false;
   state.units.filter((unit) => unit.owner === currentPlayer().id).forEach((unit) => {
     unit.moved = false;
   });
@@ -819,7 +874,13 @@ function chooseAiTile(unit) {
 
 function endIfNoActions() {
   const player = currentPlayerState();
-  if (player.ap <= 0) toast("行动力耗尽，可以结束回合。");
+  if (player.ap <= 0) {
+    if (!player.apEmptyPlayed) {
+      player.apEmptyPlayed = true;
+      playSound("apEmpty");
+    }
+    toast("行动力耗尽，可以结束回合。");
+  }
 }
 
 function finishGame() {
@@ -832,6 +893,7 @@ function finishGame() {
   els.resultText.textContent = `最终积分 ${winner.score}，资源 ${winner.resources}。中央星门、折跃门和资源点共同决定了这次赛季结算。`;
   els.resultModal.classList.add("open");
   els.resultModal.setAttribute("aria-hidden", "false");
+  playSound("win");
   renderUi();
   draw();
 }
@@ -901,7 +963,18 @@ function canWarp() {
   const unit = selectedUnit();
   if (!unit || unit.owner !== currentPlayer().id || !currentPlayer().isHuman) return false;
   const tile = tileAt(unit.q, unit.r);
-  return tile.type === "warp" && tile.owner === unit.owner && currentPlayerState().ap >= 3;
+  const player = currentPlayerState();
+  return tile.type === "warp" && tile.owner === unit.owner && player.ap >= 3 && getWarpTargets(unit, player).length > 0;
+}
+
+function getWarpTargets(unit, player) {
+  return [...state.tiles.values()].filter(
+    (item) =>
+      item.type === "warp" &&
+      item.id !== key(unit.q, unit.r) &&
+      player.explored.has(item.id) &&
+      !unitAt(item.q, item.r),
+  );
 }
 
 function ownedCount(playerId) {
@@ -926,7 +999,7 @@ function getObjectiveHint() {
     return `当前舰队站在${TILE_TYPES[tile.type].name}上，可以点击「占领」获得持续收益。`;
   }
   if (canWarp()) {
-    return "当前舰队站在己方折跃门上，可以点击「折跃」进行远距离投送。";
+    return "当前舰队站在己方折跃门上，可以点击「折跃」跳到已探索的其他折跃门。";
   }
   if (currentPlayerState().ap <= 0) {
     return "行动力已用完，点击「结束回合」让其他阵营行动。";
@@ -941,6 +1014,44 @@ function toast(message) {
   toastTimer = window.setTimeout(() => {
     els.toast.classList.remove("visible");
   }, 2600);
+}
+
+function getAudioContext() {
+  if (!audioContext) {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    audioContext = new AudioContextCtor();
+  }
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+  return audioContext;
+}
+
+function playSound(name) {
+  const context = getAudioContext();
+  const pattern = AUDIO_PATTERNS[name];
+  if (!context || !pattern) return;
+
+  let offset = 0;
+  for (const [frequency, duration, type, volume] of pattern) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const start = context.currentTime + offset;
+    const end = start + duration;
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(start);
+    oscillator.stop(end + 0.02);
+    offset += duration * 0.72;
+  }
 }
 
 function resetGame() {
