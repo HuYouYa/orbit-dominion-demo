@@ -12,6 +12,7 @@ const els = {
   resetBtn: document.getElementById("resetBtn"),
   battleLog: document.getElementById("battleLog"),
   toast: document.getElementById("toast"),
+  objectivePanel: document.getElementById("objectivePanel"),
   resultModal: document.getElementById("resultModal"),
   resultTitle: document.getElementById("resultTitle"),
   resultText: document.getElementById("resultText"),
@@ -850,6 +851,7 @@ function renderUi() {
   els.currentPlayerName.textContent = `${player.shortName} · ${player.name}`;
   els.currentPlayerName.style.color = player.color;
   els.turnInfo.textContent = `第 ${Math.min(state.round, MAX_ROUNDS)} / ${MAX_ROUNDS} 回合 · 行动力 ${playerState.ap}`;
+  els.objectivePanel.textContent = getObjectiveHint();
   els.endTurnBtn.disabled = state.gameOver || !player.isHuman;
   els.captureBtn.disabled = !canCapture();
   els.warpBtn.disabled = !canWarp();
@@ -908,6 +910,28 @@ function ownedCount(playerId) {
 
 function unitCount(playerId) {
   return state.units.filter((unit) => unit.owner === playerId).length;
+}
+
+function getObjectiveHint() {
+  if (state.gameOver) return "本局已经结算，可以点击「重新开始」再试一局。";
+  if (!currentPlayer().isHuman) return `${currentPlayer().shortName}正在行动，等待 AI 回合结束。`;
+
+  const unit = selectedUnit();
+  if (!unit) {
+    return "第一步：点击一支蓝方舰队。建议先占附近资源点，再向折跃门和中央星门推进。";
+  }
+
+  const tile = tileAt(unit.q, unit.r);
+  if (canCapture()) {
+    return `当前舰队站在${TILE_TYPES[tile.type].name}上，可以点击「占领」获得持续收益。`;
+  }
+  if (canWarp()) {
+    return "当前舰队站在己方折跃门上，可以点击「折跃」进行远距离投送。";
+  }
+  if (currentPlayerState().ap <= 0) {
+    return "行动力已用完，点击「结束回合」让其他阵营行动。";
+  }
+  return "点击蓝色光圈内的格子移动；如果光圈内有敌军，点击敌军即可攻击。";
 }
 
 function toast(message) {

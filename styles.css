@@ -180,6 +180,31 @@ h2 {
   font-size: 12px;
 }
 
+.objective-panel {
+  margin-bottom: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 200, 87, 0.35);
+  border-radius: 6px;
+  color: #fff2c7;
+  background: rgba(255, 200, 87, 0.08);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rules-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #d7e6f4;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rules-list strong {
+  color: #ffffff;
+}
+
 .section {
   padding: 12px;
   border: 1px solid var(--line);
