@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>星航棋域 Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="stage" aria-label="星航棋域游戏区域">
+        <canvas id="gameCanvas" width="1280" height="860"></canvas>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel" aria-label="游戏控制面板">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <h1>星航棋域</h1>
+            <p>Orbit Dominion · 初版 Demo</p>
+          </div>
+        </div>
+
+        <div class="scoreboard" id="scoreboard"></div>
+
+        <div class="section">
+          <h2>当前回合</h2>
+          <div class="turn-row">
+            <div>
+              <strong id="currentPlayerName">蓝方</strong>
+              <span id="turnInfo">第 1 / 20 回合</span>
+            </div>
+            <button id="endTurnBtn" type="button">结束回合</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>单位状态</h2>
+          <div id="unitPanel" class="unit-panel"></div>
+        </div>
+
+        <div class="section actions">
+          <button id="captureBtn" type="button">占领</button>
+          <button id="warpBtn" type="button">折跃</button>
+          <button id="resetBtn" type="button">重新开始</button>
+        </div>
+
+        <div class="section log-section">
+          <h2>战况记录</h2>
+          <ol id="battleLog" class="battle-log"></ol>
+        </div>
+      </aside>
+    </main>
+
+    <div class="result-modal" id="resultModal" aria-hidden="true">
+      <div class="result-dialog">
+        <h2 id="resultTitle">赛季结算</h2>
+        <p id="resultText"></p>
+        <button id="playAgainBtn" type="button">再来一局</button>
+      </div>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

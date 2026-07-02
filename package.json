@@ -1,0 +1,9 @@
+{
+  "name": "orbit-dominion-demo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes serve . -l 5173",
+    "check": "node --check app.js"
+  }
+}
